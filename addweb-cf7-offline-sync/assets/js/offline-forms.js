@@ -84,7 +84,6 @@
     }
     const formIdEl = form.querySelector('input[name="_wpcf7"]');
     const formId = formIdEl ? parseInt(formIdEl.value, 10) : undefined;
-    const titleEl = form.querySelector('input[name="_wpcf7_unit_tag"], input[name="_wpcf7_container_post"]');
     return { form_id: formId, form_title: document.title, fields, source: 'offline' };
   }
 
@@ -110,22 +109,62 @@
     setTimeout(()=>{ el.remove(); }, 5000);
   }
 
+  function setCf7Response(form, message, ok){
+    const container = form.closest('.wpcf7');
+    if(container){
+      container.classList.remove('submitting');
+      container.classList.add(ok ? 'sent' : 'failed');
+    }
+    form.classList.remove('submitting');
+    form.removeAttribute('aria-busy');
+    const btns = form.querySelectorAll('button, input[type="submit"], input[type="button"]');
+    btns.forEach(b=> b.disabled = false);
+
+    let out = container ? container.querySelector('.wpcf7-response-output') : null;
+    if(!out){
+      out = document.createElement('div');
+      out.className = 'wpcf7-response-output';
+      (container || form).appendChild(out);
+    }
+    out.textContent = message;
+    out.className = 'wpcf7-response-output ' + (ok ? 'wpcf7-mail-sent-ok' : 'wpcf7-validation-errors');
+
+    try {
+      const detail = { status: ok ? 'mail_sent' : 'failed', message: message, apiResponse: { message, status: ok ? 'mail_sent' : 'failed' } };
+      form.dispatchEvent(new CustomEvent('wpcf7submit', { bubbles: true, detail }));
+      if(ok){ form.dispatchEvent(new CustomEvent('wpcf7mailsent', { bubbles: true, detail })); }
+    } catch(_) {}
+  }
+
   function handleSubmit(e){
     const form = e.target;
     if(!form || form.getAttribute('data-offline-form') !== 'true') return;
     if(navigator.onLine) return; // let normal submit
     e.preventDefault();
+    // Prevent CF7 JS from proceeding (stop spinner/loader state)
+    if(typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+    if(typeof e.stopPropagation === 'function') e.stopPropagation();
+    // Ensure any CF7 submitting classes are cleared
+    setTimeout(()=>{
+      setCf7Response(form, form.getAttribute('data-offline-success') || 'Saved offline. We will submit it automatically when you are back online.', true);
+    }, 0);
+
     try {
       const payload = buildPayload(form);
       addToQueue(payload).then(()=>{
-        showNotice(form, form.getAttribute('data-offline-message') || 'You are offline. Your submission is saved and will be sent automatically when online.', 'info');
-        form.reset();
+        // Visual confirmation and reset
+        showNotice(form, form.getAttribute('data-offline-message') || 'You are offline. Your submission is saved.', 'info');
+        try { form.reset(); } catch(_) {}
         syncQueued();
       }).catch((err)=>{
         showNotice(form, 'Failed to save offline. Please try again later.', 'error');
         warn('Queue add failed', err);
+        setCf7Response(form, 'Failed to save offline. Please try again later.', false);
       });
-    } catch(err){ warn('handleSubmit error', err); }
+    } catch(err){
+      warn('handleSubmit error', err);
+      setCf7Response(form, 'An unexpected error occurred while saving offline.', false);
+    }
   }
 
   function registerSW(){

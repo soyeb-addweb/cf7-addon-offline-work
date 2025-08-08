@@ -8,6 +8,7 @@ class Admin {
         add_action( 'admin_menu', [ $this, 'menu' ] );
         add_action( 'admin_init', [ $this, 'register_settings' ] );
         add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_admin' ] );
+        add_action( 'admin_post_afos_clear_logs', [ $this, 'handle_clear_logs' ] );
     }
 
     public function enqueue_admin( string $hook ): void {
@@ -66,5 +67,16 @@ class Admin {
         $table = Logger::logs_table();
         $logs  = $wpdb->get_results( "SELECT * FROM {$table} ORDER BY id DESC LIMIT 200", ARRAY_A );
         include AFOS_PLUGIN_DIR . 'views/logs.php';
+    }
+
+    public function handle_clear_logs(): void {
+        if ( ! current_user_can( 'manage_options' ) ) { wp_die( esc_html__( 'Unauthorized', 'addweb-cf7-offline-sync' ) ); }
+        check_admin_referer( 'afos_clear_logs' );
+        global $wpdb;
+        $table = Logger::logs_table();
+        $wpdb->query( "DELETE FROM {$table}" );
+        Logger::info( 'Logs cleared by admin' );
+        wp_safe_redirect( add_query_arg( 'logs_cleared', '1', admin_url( 'admin.php?page=afos-logs' ) ) );
+        exit;
     }
 }
