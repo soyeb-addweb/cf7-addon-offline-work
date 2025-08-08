@@ -1,0 +1,10 @@
+/* AFOS Admin Styles */
+.afos-wrap { background: #fff; padding: 20px; border: 1px solid #ccd0d4; border-radius: 6px; }
+.afos-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.afos-card { background: #f8f9fa; border: 1px solid #e2e8f0; padding: 16px; border-radius: 6px; }
+.afos-table { width: 100%; border-collapse: collapse; }
+.afos-table th, .afos-table td { padding: 8px 10px; border-bottom: 1px solid #eee; text-align: left; }
+.afos-actions { margin-top: 16px; display: flex; gap: 12px; align-items: center; }
+.afos-notice { margin: 10px 0; padding: 10px 12px; border-radius: 4px; }
+.afos-notice.info { background:#e6f4ff; border:1px solid #90caf9; }
+.afos-notice.error { background:#ffebee; border:1px solid #ef9a9a; }
