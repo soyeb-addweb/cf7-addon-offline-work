@@ -63,6 +63,7 @@ class Plugin {
             'textDomain'     => 'addweb-cf7-offline-sync',
         ) );
 
+        wp_enqueue_style( 'afos-frontend', AFOS_PLUGIN_URL . 'assets/css/frontend.css', array(), AFOS_VERSION );
         wp_enqueue_script( $handle );
     }
 }

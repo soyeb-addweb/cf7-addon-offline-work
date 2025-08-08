@@ -1,0 +1,4 @@
+/* AFOS Frontend Notices */
+.afos-notice { font: 14px/1.4 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif; margin: 10px 0; padding: 10px 12px; border-radius: 4px; }
+.afos-notice.info { background:#e6f4ff; border:1px solid #90caf9; color:#09589e; }
+.afos-notice.error { background:#ffebee; border:1px solid #ef9a9a; color:#7b1c1c; }
