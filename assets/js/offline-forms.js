@@ -152,18 +152,31 @@
     } catch(_) {}
   }
 
-  function handleSubmit(e){
-    const form = e.target;
-    if(!form || form.getAttribute('data-offline-form') !== 'true') return;
-    log('Form submit event captured', { online: navigator.onLine });
-    if(navigator.onLine) return; // let normal submit
-    e.preventDefault();
-    if(typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
-    if(typeof e.stopPropagation === 'function') e.stopPropagation();
+  function interceptForm(form){
+    if(form.__afosBound) return;
+    form.__afosBound = true;
+    // Capture submit on the form itself at capture phase for priority
+    form.addEventListener('submit', handleSubmit, true);
+    // Also intercept clicks on submit buttons
+    form.addEventListener('click', function(ev){
+      const target = ev.target;
+      if(!target) return;
+      if(form.getAttribute('data-offline-form') !== 'true') return;
+      if(navigator.onLine) return;
+      if(target.matches('button[type="submit"], input[type="submit"], input[type="image"]')){
+        log('Intercept submit click offline');
+        ev.preventDefault();
+        ev.stopPropagation();
+        ev.stopImmediatePropagation();
+        handleOfflineSubmit(form);
+      }
+    }, true);
+  }
+
+  function handleOfflineSubmit(form){
     setTimeout(()=>{
       setCf7Response(form, form.getAttribute('data-offline-success') || 'Saved offline. We will submit it automatically when you are back online.', true);
     }, 0);
-
     try {
       const payload = buildPayload(form);
       log('Saving submission to local queue', payload);
@@ -178,9 +191,20 @@
         setCf7Response(form, 'Failed to save offline. Please try again later.', false);
       });
     } catch(err){
-      warn('handleSubmit error', err);
+      warn('offlineSubmit error', err);
       setCf7Response(form, 'An unexpected error occurred while saving offline.', false);
     }
+  }
+
+  function handleSubmit(e){
+    const form = e.target;
+    if(!form || form.getAttribute('data-offline-form') !== 'true') return;
+    log('Form submit event captured', { online: navigator.onLine });
+    if(navigator.onLine) return; // let normal submit
+    e.preventDefault();
+    if(typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+    if(typeof e.stopPropagation === 'function') e.stopPropagation();
+    handleOfflineSubmit(form);
   }
 
   function registerSW(){
@@ -214,10 +238,33 @@
     postEvent('offline', { at: now });
   }
 
+  function attachListeners(){
+    document.querySelectorAll('form[data-offline-form="true"]').forEach(interceptForm);
+  }
+
+  function observeForms(){
+    const mo = new MutationObserver((mutations)=>{
+      for(const m of mutations){
+        if(m.type === 'childList'){
+          m.addedNodes && m.addedNodes.forEach((node)=>{
+            if(node && node.nodeType === 1){
+              if(node.matches && node.matches('form[data-offline-form="true"]')) interceptForm(node);
+              node.querySelectorAll && node.querySelectorAll('form[data-offline-form="true"]').forEach(interceptForm);
+            }
+          });
+        }
+      }
+    });
+    mo.observe(document.documentElement, { childList: true, subtree: true });
+  }
+
   function init(){
     log('AFOS init');
     registerSW();
+    // Global capture as extra safety
     document.addEventListener('submit', handleSubmit, true);
+    attachListeners();
+    observeForms();
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
     setTimeout(syncQueued, 2000);
