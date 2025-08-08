@@ -40,6 +40,18 @@ class Rest {
                 'permission_callback' => function(){ return current_user_can( 'manage_options' ); },
             ),
         ) );
+
+        register_rest_route( 'addweb-cf7/v1', '/events', array(
+            array(
+                'methods'             => WP_REST_Server::CREATABLE,
+                'callback'            => [ $this, 'record_event' ],
+                'permission_callback' => '__return_true',
+                'args'                => array(
+                    'type' => array( 'type' => 'string', 'required' => true ),
+                    'data' => array( 'type' => 'object', 'required' => false ),
+                ),
+            ),
+        ) );
     }
 
     private function validate_api_key( WP_REST_Request $request ): bool {
@@ -84,6 +96,16 @@ class Rest {
 
         Logger::info( 'Submission synced', array( 'id' => $id, 'form_id' => $form_id ) );
         return new WP_REST_Response( array( 'id' => $id, 'status' => 'synced' ), 201 );
+    }
+
+    public function record_event( WP_REST_Request $request ) {
+        if ( ! $this->validate_api_key( $request ) ) {
+            return new WP_Error( 'afos_forbidden', __( 'Invalid API key.', 'addweb-cf7-offline-sync' ), array( 'status' => 403 ) );
+        }
+        $type = sanitize_text_field( (string) $request->get_param( 'type' ) );
+        $data = (array) $request->get_param( 'data' );
+        Logger::info( 'Client event', array( 'type' => $type, 'data' => $data ) );
+        return new WP_REST_Response( array( 'ok' => true ), 200 );
     }
 
     private function format_fields_for_email( array $fields, string $form_title = '', int $form_id = 0 ): string {

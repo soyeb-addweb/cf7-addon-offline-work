@@ -4,7 +4,7 @@
   const settings = (typeof AFOS_SETTINGS !== 'undefined') ? AFOS_SETTINGS : {};
   const LOG_PREFIX = '[AFOS]';
 
-  function log(){ if(settings.enableDebug && console) { console.log(LOG_PREFIX, ...arguments); } }
+  function log(){ if(console) { console.log(LOG_PREFIX, ...arguments); } }
   function warn(){ if(console) { console.warn(LOG_PREFIX, ...arguments); } }
 
   // IndexedDB wrapper
@@ -57,11 +57,27 @@
     }));
   }
 
+  async function postEvent(type, data){
+    try {
+      const url = settings.restUrl.replace(/\/$/, '') + '/events';
+      await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-afos-api-key': settings.apiKey || ''
+        },
+        body: JSON.stringify({ type, data: data || {} })
+      });
+    } catch(e) { /* swallow */ }
+  }
+
   async function syncQueued(){
     if(!navigator.onLine){ return; }
     const items = await getAllQueued();
+    if(items.length){ log('Sync queued start', { count: items.length }); }
     for(const item of items){
       try {
+        log('Syncing one item', item);
         await syncOne(item);
         await removeFromQueue(item.id);
         log('Synced queued submission', item);
@@ -139,26 +155,26 @@
   function handleSubmit(e){
     const form = e.target;
     if(!form || form.getAttribute('data-offline-form') !== 'true') return;
+    log('Form submit event captured', { online: navigator.onLine });
     if(navigator.onLine) return; // let normal submit
     e.preventDefault();
-    // Prevent CF7 JS from proceeding (stop spinner/loader state)
     if(typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
     if(typeof e.stopPropagation === 'function') e.stopPropagation();
-    // Ensure any CF7 submitting classes are cleared
     setTimeout(()=>{
       setCf7Response(form, form.getAttribute('data-offline-success') || 'Saved offline. We will submit it automatically when you are back online.', true);
     }, 0);
 
     try {
       const payload = buildPayload(form);
+      log('Saving submission to local queue', payload);
       addToQueue(payload).then(()=>{
-        // Visual confirmation and reset
+        log('Saved to local queue');
         showNotice(form, form.getAttribute('data-offline-message') || 'You are offline. Your submission is saved.', 'info');
         try { form.reset(); } catch(_) {}
         syncQueued();
       }).catch((err)=>{
-        showNotice(form, 'Failed to save offline. Please try again later.', 'error');
         warn('Queue add failed', err);
+        showNotice(form, 'Failed to save offline. Please try again later.', 'error');
         setCf7Response(form, 'Failed to save offline. Please try again later.', false);
       });
     } catch(err){
@@ -169,14 +185,41 @@
 
   function registerSW(){
     if('serviceWorker' in navigator){
-      navigator.serviceWorker.register(settings.swUrl).catch(()=>{});
+      log('Registering service worker', settings.swUrl);
+      navigator.serviceWorker.register(settings.swUrl).catch((e)=>{ warn('SW register failed', e); });
     }
   }
 
+  function handleOnline(){
+    const now = Date.now();
+    log('Back online at', new Date(now).toISOString());
+    try {
+      const start = parseInt(localStorage.getItem('afosOfflineStart') || '0', 10);
+      if(start){
+        const duration = now - start;
+        log('Offline duration (ms)', duration);
+        postEvent('back_online', { since: start, durationMs: duration });
+        localStorage.removeItem('afosOfflineStart');
+      } else {
+        postEvent('back_online', { since: null });
+      }
+    } catch(_) {}
+    setTimeout(syncQueued, 1000);
+  }
+
+  function handleOffline(){
+    const now = Date.now();
+    log('Went offline at', new Date(now).toISOString());
+    try { localStorage.setItem('afosOfflineStart', String(now)); } catch(_) {}
+    postEvent('offline', { at: now });
+  }
+
   function init(){
+    log('AFOS init');
     registerSW();
     document.addEventListener('submit', handleSubmit, true);
-    window.addEventListener('online', ()=> { setTimeout(syncQueued, 1000); });
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
     setTimeout(syncQueued, 2000);
   }
 
