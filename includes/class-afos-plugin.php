@@ -25,8 +25,8 @@ class Plugin {
         // CF7 integration
         ( new CF7() )->hooks();
 
-        // Frontend assets
-        add_action( 'wp_enqueue_scripts', [ $this, 'enqueue_frontend' ] );
+        // Frontend assets (early to beat CF7 listeners)
+        add_action( 'wp_enqueue_scripts', [ $this, 'enqueue_frontend' ], -1000 );
 
         // Log that plugin initialized
         Logger::info( 'AFOS plugin initialized', [ 'version' => AFOS_VERSION ] );
@@ -39,7 +39,7 @@ class Plugin {
             AFOS_PLUGIN_URL . 'assets/js/offline-forms.js',
             array(),
             AFOS_VERSION,
-            true
+            false
         );
 
         $pages_to_cache = get_option( 'afos_pages_to_cache', array() );
